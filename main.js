@@ -105,6 +105,17 @@
         }
     }
     base.innerHTML = menu;
+    var u = 1;
+    const addAnswers = () => {
+        if (IdList.length > 0 && u < IdList.length){
+            q.getAnswer(IdList[u]);
+            u++;
+            if (u == IdList.length){
+                document.getElementById("addBtn").setAttribute("disabled", "");
+                document.getElementById("addBtn").classList.add("noHover");
+            }
+        }
+    }
     setTimeout(() => {
         const TargNode = document.getElementsByClassName("sia-input");
         if (TargNode.length == 1) {
@@ -116,7 +127,7 @@
             let observer = new MutationObserver(()=>{
                 document.getElementById("results").innerHTML = '';
                 IdList.length = 0;
-                u = 0;
+                u = 1;
                 q.query();
             });
             const TargNode2 = document.getElementsByClassName('sia-question-stem')[0];
@@ -129,16 +140,6 @@
             console.log("Page didn't load intime, Menu Not Injected!");
         }
     },6000)
-    var u = 1;
-    const addAnswers = () => {
-        if (IdList.length > 0 && u < IdList.length){
-            q.getAnswer(IdList[u]);
-            u++;
-            if (u == IdList.length - 1){
-                document.getElementById("addBtn").setAttribute("disabled", "");
-                document.getElementById("addBtn").classList.add("noHover");
-            }
-        }
-    }
+
 
 })();
