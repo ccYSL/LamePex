@@ -1,145 +1,186 @@
 // ==UserScript==
-// @name         LamePex ApexLeanring Auto Answer
+// @name         Lamepex
 // @namespace    https://apexlearning.com/
-// @version      0.1
-// @description  Automatically grab ApexLearning quiz question and query it through Brainly.com's GraphQL API for an answer.
+// @version      2.0
+// @description  no need.
 // @author       ccccc
-// @match        https://course.apexlearning.com/public/activity/*
+// @match        https://course.apexlearning.com/public/activity/*/assessment
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=tampermonkey.net
 // @grant        GM.xmlHttpRequest
 // ==/UserScript==
 
-(function() {
-    'use strict';
-    console.log("LamePex v0.1");
-    let menu = ` <div style="position:relative;left:5%;width:512px;height:369px;background-color:#151616;border-radius:.50rem"> <div style="height:33px;background-image:linear-gradient(#0e6879,#063e49);border-radius:.50rem .50rem 0 0"> <h2 style="text-align:center;font-family:fantasy;color:#002fff;text-shadow:0 0 20px #39006e">𝓛𝓪𝓶𝓮𝓟𝓮𝔁</h2> <style>th{font-family:fantasy; border-bottom: 2px solid white;}</style> </div> <div style="position:relative;top:3%;height:70%; overflow: auto;"> <table style="margin: 0 auto;"> <thead> <tr> <th>Answer</th> <th>Rating</th> </tr> </thead> <tbody id="results"> </tbody> </table> <div style="justify-content: center; display: flex;"> <button class="addAnswers" id="addBtn">Add Answers</button> <style> .addAnswers { background: #272626; width: 100px; height: 35px; font-size: medium; border: 0; border-radius: 4px; transition: .2s; } .addAnswers:hover{ background: rgb(17, 185, 93); width: 512px; cursor: pointer; } .noHover { pointer-events: none; } </style> </div> </div> </div> </div>`
-    let IdList = [];
-    let base = document.createElement("div");
-    const fragment = document.createDocumentFragment();
-    const q = {
-        'question': function () {
-            return(document.querySelector(".sia-question-stem").innerText)
-        },
-        'query': function () {
-            const RandomHash = "61d4ce5b122351aa53103c6a9b0f87a66bdb34ad06a4fbc2d8f785bed441401d";
-            const qreq = new XMLHttpRequest();
-            const SearchEndPoint = "https://brainly.com/graphql/us?operationName=SearchPage";
-            qreq.onreadystatechange = function () {
-                if (this.readyState == 4 && this.status == 200) {
-                    let jsonResponse = JSON.parse(this.responseText);
-                    const answeredge = jsonResponse.data.questionSearch.edges;
-                    console.log(answeredge);
-                    for(let i=0; i < answeredge.length; i++) {
-                        IdList.push(answeredge[i].node.databaseId);
-                    }
-                    q.getAnswer(IdList[0]);
-                }
-            }
-            qreq.open('GET', `${SearchEndPoint}&variables=%7B%22query%22%3A%22:${q.question()}%22%2C%22after%22%3Anull%2C%22first%22%3A10%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22${RandomHash}%22%7D%7D`);
-            qreq.send();
-        },
-        'getAnswer': function (dbid) {
-            const siftr = new DOMParser();
-            GM.xmlHttpRequest({
-                method: "GET",
-                url: `https://brainly.com/question/${dbid}`,
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0",
-                    "Accept-Language": "en-US,en;q=0.5"
-                },
-                onload: function(response){
-                    const answerhtml = siftr.parseFromString(response.responseText, "text/html");
-                    const answernode = answerhtml.querySelectorAll("script[type='application/ld+json']");
-                    const answerjson = JSON.parse(answernode[0].innerHTML);
-                    let scriptlist = [];
-                    let rating = [];
-                    const scripts = answerhtml.querySelectorAll("script");
-                    const img = answerhtml.getElementsByClassName("brn-qpage-next-attachments-viewer-image-preview__image")[0];
-                    function appendAnswer(answr, rating) {
-                        const atr = document.createElement("tr");
-                        if (img){
-                            atr.innerHTML = `<th>${answr} <a href=${img.src} target="_blank">img</a></th><th>${rating}</th>`;
-                        }
-                        else {
-                            atr.innerHTML = `<th>${answr}</th><th>${rating}</th>`;
-                        }
-                        fragment.appendChild(atr);
-                    }
-                    for (var z=0; z < scripts.length; z++) {
-                        if (scripts[z].attributes.length == 0) {
-                            scriptlist.push(scripts[z])
-                    }
-                    }
-                    for (var c=0; c < scriptlist.length; c++){
-                        if (scriptlist[c].text.includes('comments')){
-							let stext = scriptlist[c].text;
-                            stext = JSON.parse(stext.slice(stext.indexOf('{"author'), stext.lastIndexOf("}")-1))
-                            for (var v=0; v < stext.answers.length; v++){
-                                rating.push(stext.answers[v].rating)
-							    console.log(rating)
-                          }
-                        break;
-                        }
+(function(){
+  const api = 'https://srv-unified-search.external.search-systems-production.z-dn.net/api/v1/us/search'
+  const brainly = 'https://brainly.com/question/'
+  const lamepex = `<style>@import url('https://fonts.googleapis.com/css2?family=Montserrat+Alternates:wght@300;400&display=swap');@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400&family=Montserrat+Alternates:wght@300;400&display=swap');:root{--dark:#0e0f10;--darker:#111213;--light:#cfcfcf}.gui{width:25vw;height:335px;min-width:390px;background-color:var(--dark);border-radius:13px}.h{height:fit-content;text-align:center}.t{color:var(--light);font-size:1.5em;font-family:'Montserrat Alternates',sans-serif;user-select:none;padding:5px 41px 7px;margin:5px}.settings{float:right;stroke:var(--light);margin:7px 7px;transition:.5s}.settings:hover{transition:.5s;rotate:25deg;cursor:pointer;stroke:#610000}.flex{display:flex}.fc{flex-direction:column}.fr{flex-direction:row}.jcc{justify-content:center}th{border: solid #610000 2px;color:#cfcfcf;font-family:'JetBrains Mono',monospace;width:1vw;border-radius:6px;background-color:var(--darker)}#menu{max-height:85%;overflow-y:auto;scrollbar-width:thin}tr{max-height:50px}table{width:97%; border-spacing:10px;}.tac{text-align:center}#smenu{display:none;flex-direction:column}.f1{font-family:'Montserrat Alternates',sans-serif;color:var(--light)}.fs1{font-size:large}.fs2{font-size:14px}.gap{gap:5px}.od{width:12.4vw;min-width:190px;height:fit-content;padding:5px;margin:5px;background-color:var(--darker);border-radius:11px}.ob{width:100%;height:30px;border:0;padding:0;background-color:inherit}.ob:hover{cursor:pointer;border:#610000 solid 2px !important}</style><div class="gui"><header class="h"><svg class="settings" id="settings" xmlns="http://www.w3.org/2000/svg" width="27" height="27" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><h2 class="t">Lamepex</h2></header><div id="menu" class="flex jcc gap"><table><tbody id="mtbody"></tbody></table></div><div id="smenu"><section class="flex fr"><div class="od"><header class="f1 tac fs1 gap">Filtering</header><button class="ob jcc f1 fs2" id="hra">High-Rated Answers Only</button><button class="ob jcc f1 fs2" id="iqp">Include Question Pictures</button><button class="ob jcc f1 fs2" id="fao">Attempt to Filter Answer Out</button></div><div class="od"><header class="f1 tac fs1 gap">Other</header><button class="ob jcc f1 fs2" id="ap">Auto Pilot</button><button class="ob jcc f1 fs2" id="ah">Answer Hightlighting</button><button class="ob jcc f1 fs2" id="qa">Query with Answers</button></div></section><section class="flex fr"><div class="od" style="width:100%!important"><header class="f1 tac fs1 gap2">Credit</header><p class="fs1 f1 tac" style="margin:5px">Made by Ce</p><h2 class="tac" style="margin:7px auto">💯�</h2><p class="tac f1 fs1" style="margin:0">v2.0</p><p class="tac f1 fs1" style="margin:0">c@sanguineparadi.se</p></div></section></div><div></div></div>`
+  const base = document.createElement("div");
+  base.innerHTML = lamepex;
+
+
+  let state = {
+      smenu: false,
+      config: {
+          ap: false,
+          qa: true,
+          ah: true,
+          bra: false,
+          iqp: false,
+          fao: false
+      }
+  }
+
+  let AA = [];
+  let MA = [];
+  let matchCount = [];
+  const ratingTable = {
+    5: 2,
+    4: 1.5,
+    3: 1,
+    2: 0,
+    1: -1,
+    0: 0.5
+  }
+  const tools = {
+      darkify: ()=>{
+          document.querySelector('.sidenav-container').style.backgroundColor = 'rgb(24, 26, 27)'
+          document.querySelector('.toolbar').style.backgroundColor = 'rgb(30, 32, 33)'
+          document.querySelector('.footer-wrapper').style.backgroundColor = 'rgb(30, 32, 33)'
+          document.querySelector('.mat-drawer-container').style.color = 'rgba(232, 230, 227, 0.87)'
+          document.querySelector('.sia-question-number').style.color = 'rgba(232, 230, 227, 0.87)'
+      },
+      apexAnswers: {
+          match: (a, rating) => {
+              if (a==1){
+                const la = matchCount.indexOf(Math.max.apply(null, matchCount));
+                console.log(matchCount, la)
+                if (state.config.ah){
+                  console.log(matchCount)
+                  document.querySelectorAll('[id^="sia-multiple-choice-label-"]')[la].style.backgroundColor = 'green';
+              }
+                  if (state.config.ap){
+                    matchCount.every(n => n === 0) ? tools.apexAnswers.rematch() : tools.apexAnswers.ap(la);
+                  }
+              } else{
+                  MA.forEach((e, index) => {
+                      if (a.includes(e)){
+                        console.log("f1", rating);
+                        rating = Number(rating);
+                        rating = Math.floor(rating);
+                        console.log('r2', rating)
+                        console.log(`ratingTa: ${ratingTable[rating]}`)
+                        matchCount[index] += ratingTable[rating]
                       }
-                    let answrcount = answerjson[0].mainEntity.answerCount;
-                    var i=0;
-                    if (answerjson[0].mainEntity.acceptedAnswer){
-                        let AcceptedAnswer = answerjson[0].mainEntity.acceptedAnswer[0].text;
-                        if (img){
-                            AcceptedAnswer = `${AcceptedAnswer} <a href=${img.src} target="_blank"></a>`
-                        }
-                        appendAnswer(AcceptedAnswer, rating[i]);
-                        answrcount = answrcount - 1;
+                      })
+              }
+          },
+          rematch: () => {
+            console.log('rematch cuh')
+          },
+          ap: (i)=>{
+              document.querySelectorAll('[id^="sia-multiple-choice-label-"]')[i].click()
+              document.querySelector('button[type=submit]').click()
+          },
 
-                    }
-                    if (answerjson[0].mainEntity.suggestedAnswer){
-                        for (i; i < answrcount; i++) {
-                            appendAnswer(answerjson[0].mainEntity.suggestedAnswer[i].text, rating[i]);
-                        }
-                    }
-                    document.getElementById("results").appendChild(fragment);
+          get: () => {
+            document.querySelectorAll('[id^="sia-multiple-choice-label-"]').forEach((e)=>{
+              e = e.textContent.slice(2).replace(/[.,'"]/g, "").toLowerCase();
+              AA.push(e);
+              MA.push(e.replace(/\s/g, ""))
+              console.log(MA)
+          })
+          for (let i=0;i < AA.length; i++){
+              matchCount.push(0);
+          }
+      }},
+      query: () => {
+          let q = document.querySelector('.sia-question-stem :nth-child(1)').textContent
+          tools.apexAnswers.get()
+          if (state.config.qa){
+              AA.forEach((e) => {
+                q += ` ${e}`
+              })
+          }
+          q = q.replace(/(\r\n|\n|\r|['"])/gm, "");
+          console.log(q)
+          GM.xmlHttpRequest({
+              method: 'POST',
+              url: api,
+              data: `{"query":{"text":"${q}"}}`,
+              onload: (r) => {
+                  let qids = new Set()
+                  r = JSON.parse(r.response)
+                  console.log(`{"query":{"text":"${q}"}}`)
+                  r.results.forEach(e => {
+                  qids.add(e.question.id)
+                });
+                qids = Array.from(qids);
+                tools.getAnswers(qids);
+              }
+          })
+      },
+      getAnswers: (qids) => {
+        console.log(qids)
+          let x=0;
+          qids.forEach((i) => {
+          GM.xmlHttpRequest({
+              method: 'GET',
+              url: `${brainly}${i}`,
+              onload: (r) => {
+                  const parser = new DOMParser();
+                  let body = parser.parseFromString(r.response, 'text/html').body;
+                  let i = 0
+                  body.querySelectorAll('div[data-testid="answer-box-content-text"]').forEach((e) => {
+                  let rating = body.querySelectorAll('div[data-testid=answer_box_rating_value]')[i].innerText
+                  rating = rating.slice(13)
+                  i++;
+                  const tr = document.createElement('tr');
+                  if (state.config.ah) {
+                      tools.apexAnswers.match(e.textContent.replace(/[.,'"\s]/g, "").toLowerCase(), rating);
+                  }
+                  tr.innerHTML = `<th>${e.textContent} ${rating}</th>`
+                  document.getElementById('mtbody').appendChild(tr)
+                  })
+                  if (x == qids.length-1){
+                    console.log("gotcha")
+                    tools.apexAnswers.match(1);
                 }
+                  x++;
+              }
             })
-
-
-        }
-    }
-    base.innerHTML = menu;
-    var u = 1;
-    const addAnswers = () => {
-        if (IdList.length > 0 && u < IdList.length){
-            q.getAnswer(IdList[u]);
-            u++;
-            if (u == IdList.length){
-                document.getElementById("addBtn").setAttribute("disabled", "");
-                document.getElementById("addBtn").classList.add("noHover");
-            }
-        }
-    }
-    setTimeout(() => {
-        const TargNode = document.getElementsByClassName("sia-input");
-        if (TargNode.length == 1) {
-            TargNode[0].appendChild(base);
-            document.getElementById("addBtn").onclick = addAnswers;
-            document.querySelector("button[type='submit']").onclick = q.submit;
-            console.log("Menu Injected!")
-            q.query();
-            let observer = new MutationObserver(()=>{
-                document.getElementById("results").innerHTML = '';
-                IdList.length = 0;
-                u = 1;
-                q.query();
-            });
-            const TargNode2 = document.getElementsByClassName('sia-question-stem')[0];
-            observer.observe(TargNode2, {
-                childList: true,
-                subtree: false
-            })
-        }
-        else {
-            console.log("Page didn't load intime, Menu Not Injected!");
-        }
-    },6000)
-
-
+        })
+      }
+  }
+  const id = setInterval(()=>{
+  if (document.querySelector('.sia-question-stem')) {
+  const observer = new MutationObserver(() => {
+      document.getElementById('mtbody').innerHTML = '';
+      AA = [];
+      MA = [];
+      matchCount = [];
+      tools.query();
+    })
+  const targ = document.getElementsByClassName('sia-question-stem')[0];
+  observer.observe(targ, {
+      childList: true,
+      subtree: false
+    })
+  tools.darkify();
+  document.querySelector('.sia-input').appendChild(base);
+  const settings = document.getElementById('settings');
+  const smenu = document.getElementById('smenu');
+  const menu = document.getElementById('menu')
+  smenu.addEventListener('click', (ev) => {
+      if (ev.target.nodeName === 'BUTTON'){
+        const e = document.getElementById(ev.target.id);
+        state.config[ev.target.id] = !state.config[ev.target.id];
+        state.config[ev.target.id] ? e.style.color = '#610000' : e.style.color = 'var(--light)';
+      }
+    })
+    settings.onclick = () => {
+        state.smenu ? (state.smenu = false, smenu.style.display = 'none', menu.style.display = '') : (state.smenu = true, smenu.style.display = 'flex', menu.style.display = 'none');
+}
+  tools.query();
+  clearInterval(id);
+}
+  }, 500)
 })();
